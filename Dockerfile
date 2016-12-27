@@ -1,45 +1,49 @@
-FROM php:7-fpm-alpine
+FROM php:7.1-fpm-alpine
 MAINTAINER "Ryan Paddock <rpaddock@gmail.com>"
 
-EXPOSE 9000
 
-RUN echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
+RUN echo "http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
+    && echo "http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
     && apk add --no-cache \
-        libmcrypt \
         freetype \
+        gosu \
         libjpeg-turbo \
+        libmcrypt \
         libpng \
-        gosu@testing
-
-RUN apk add --no-cache --virtual build-dependencies \
-    libmcrypt-dev \
-    freetype-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
-    zlib-dev
-
-RUN docker-php-ext-install \
-    mcrypt \
-    mysqli \
-    pdo_mysql \
-    mbstring \
-    zip \
+        shadow \
+    && apk add --no-cache --virtual build-dependencies \
+        autoconf \
+        freetype-dev \
+        g++ \
+        libjpeg-turbo-dev \
+        libmcrypt-dev \
+        libpng-dev \
+        make \
+        zlib-dev \
+    && docker-php-ext-install \
+        mcrypt \
+        mysqli \
+        pdo_mysql \
+        zip \
     && docker-php-ext-configure gd \
         --enable-gd-native-ttf \
         --with-jpeg-dir=/usr/lib/x86_64-linux-gnu \
         --with-png-dir=/usr/lib/x86_64-linux-gnu \
         --with-freetype-dir=/usr/lib/x86_64-linux-gnu \
     && docker-php-ext-install gd \
-    && apk add --no-cache phpredis@testing
+    && pecl install redis \
+    && pecl install xdebug-2.5.0 \
+    && docker-php-ext-enable redis \
+    && apk del --force build-dependencies \
+    && usermod -u 1000 www-data \
+    && mkdir /docker-entrypoint-initdb.d
 
-RUN apk del --force build-dependencies
-
-RUN cat /usr/src/php/php.ini-production | sed 's/^;\(date.timezone.*\)/\1 \"Etc\/UTC\"/' > /usr/local/etc/php/php.ini
-RUN sed -i 's/;\(cgi\.fix_pathinfo=\)1/\10/' /usr/local/etc/php/php.ini
+COPY php.ini-production /usr/local/etc/php/php.ini
+COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 WORKDIR /var/www
 
-RUN mkdir /docker-entrypoint-initdb.d
-COPY docker-entrypoint.sh /
+EXPOSE 9000
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["php-fpm"]
